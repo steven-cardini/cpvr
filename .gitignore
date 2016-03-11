@@ -17,6 +17,10 @@ target/
 # Raw data #
 *.raw
 *.nef
+
+# Matlab #
+*.asv
+*.m~
  
 ######################
 # Windows

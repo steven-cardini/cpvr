@@ -9,7 +9,7 @@
 %##########################################################################
 clear all; close all; clc; %clear matrices, close figures & clear cmd wnd.
 
-X = imread('../Images/Blood2.bmp'); %liesst BMP in Matrix X 
+X = imread('../img/blood2.bmp'); %liest BMP in Matrix X 
 I = im2single(X);                   %Konvertierung in Mat. I mit floats (0-1)
 imshow(I);                          %Bild anzeigen
 title('Original');
