@@ -35,10 +35,16 @@ public class BillardTracker implements PlugInFilter {
     ImagePlus imgHue = NewImage.createByteImage("Hue", width, height, 1, NewImage.FILL_BLACK);
     ImageProcessor ipHue = imgHue.getProcessor();
     byte[] pixHue = (byte[]) ipHue.getPixels();
+    
+    ImagePlus imgBrightness = NewImage.createByteImage("Brightness", width, height, 1, NewImage.FILL_BLACK);
+    ImageProcessor ipBrightness = imgBrightness.getProcessor();
+    byte[] pixBrightness = (byte[]) ipBrightness.getPixels();
 
     for (int i = 0; i < pixRGB.length; i++) {
       pixGray[i] = (byte) bayerProcessor.getValue(i);
       pixRGB[i] = bayerProcessor.getRGB(i);
+      pixHue[i] = (byte) bayerProcessor.getHue(i);
+      pixBrightness[i] = (byte) bayerProcessor.getBrightness(i);
     }
 
     long ms = System.currentTimeMillis() - msStart;
@@ -48,9 +54,10 @@ public class BillardTracker implements PlugInFilter {
 
     PNG_Writer png = new PNG_Writer();
     try {
-      png.writeImage(imgRGB, "img/Billard1024x544x3.png", 0);
-      // png.writeImage(imgHue, "img/Billard1024x544x1H.png", 0);
       png.writeImage(imgGray, "img/Billard1024x544x1B.png", 0);
+      png.writeImage(imgRGB, "img/Billard1024x544x3.png", 0);
+      png.writeImage(imgHue, "img/Billard1024x544x1H.png", 0);
+      png.writeImage(imgBrightness, "img/Billard1024x544x1H.png", 0);
 
     } catch (Exception e) {
       e.printStackTrace();
@@ -60,8 +67,10 @@ public class BillardTracker implements PlugInFilter {
     imgGray.updateAndDraw();
     imgRGB.show();
     imgRGB.updateAndDraw();
-    // imgHue.show();
-    // imgHue.updateAndDraw();
+    imgHue.show();
+    imgHue.updateAndDraw();
+    imgBrightness.show();
+    imgBrightness.updateAndDraw();
   }
 
   public static void main(String[] args) {

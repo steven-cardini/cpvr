@@ -1,5 +1,7 @@
 package imagej_billard;
 
+import java.awt.Color;
+
 public class BayerProcessor {
 
   private static int MAX_VALUE = 255;
@@ -31,6 +33,22 @@ public class BayerProcessor {
     value += rgb[1] << 8;
 
     return value;
+  }
+
+  public float getHue(int index) {
+    int[] rgb = calculateRGB(index);
+    float[] hsb = new float[3];
+    Color.RGBtoHSB(rgb[0], rgb[1], rgb[2], hsb);
+
+    return (hsb[0] * MAX_VALUE);
+  }
+
+  public float getBrightness(int index) {
+    int[] rgb = calculateRGB(index);
+    float[] hsb = new float[3];
+    Color.RGBtoHSB(rgb[0], rgb[1], rgb[2], hsb);
+
+    return (hsb[2] * MAX_VALUE);
   }
 
   private int[] calculateRGB(int index) {
