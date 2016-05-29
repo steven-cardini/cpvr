@@ -11,18 +11,18 @@ import ij.process.*;
 public class HoughTransform implements PlugInFilter {
 
   class HoughLine {
-    private int mAngle, mRadius;
+    private double mAngle, mRadius;
 
-    public HoughLine(int angle, int radius) {
+    public HoughLine(double angle, double radius) {
       mAngle = angle;
       mRadius = radius;
     }
-    
-    public int radius() {
+
+    public double radius() {
       return mRadius;
     }
-    
-    public int angle() {
+
+    public double angle() {
       return mAngle;
     }
 
@@ -100,17 +100,17 @@ public class HoughTransform implements PlugInFilter {
             max = Math.max(max, hough1[ang - 1][rad - 1]); // pixel bottom left
             max = Math.max(max, hough1[ang][rad - 1]); // pixel bottom
           }
-          if (rad < nRad-1) {
+          if (rad < nRad - 1) {
             max = Math.max(max, hough1[ang - 1][rad + 1]); // pixel top left
             max = Math.max(max, hough1[ang][rad + 1]); // pixel top
           }
         }
-        if (ang < nAng-1) {
+        if (ang < nAng - 1) {
           max = Math.max(max, hough1[ang + 1][rad]); // pixel right
           if (rad > 0) {
             max = Math.max(max, hough1[ang + 1][rad - 1]); // pixel bottom right
           }
-          if (rad < nRad-1) {
+          if (rad < nRad - 1) {
             max = Math.max(max, hough1[ang + 1][rad + 1]); // pixel top right
           }
         }
@@ -125,46 +125,35 @@ public class HoughTransform implements PlugInFilter {
     }
 
     // Build histogram of the array hough2
-    int[] hist = new int[maxAccum+1];
+    int[] hist = new int[maxAccum + 1];
     for (int ang = 0; ang < nAng; ang++) {
       for (int rad = 0; rad < nRad; rad++) {
         hist[hough2[ang][rad]]++;
       }
     }
-    
-    // print histogram
-    for (int i = maxAccum; i >= 0; i--) {
-      System.out.println("Value: "+i+" Amount: "+hist[i]);
-    }
 
     // Get n strongest lines into array lines
     int found = 0;
-    int value = maxAccum+1;
+    int value = maxAccum + 1;
     int amount = 0;
-    
-    while (found < nLines) {  
+
+    while (found < nLines) {
       do {
         value--;
         amount = hist[value];
-      }      
-      while (amount==0);
-      
+      } while (amount == 0);
+
       for (int ang = 0; ang < nAng; ang++) {
         for (int rad = 0; rad < nRad; rad++) {
           if (hough2[ang][rad] == value) {
-            lines[found] = new HoughLine(ang, rad);
+            lines[found] = new HoughLine(dAng * ang, dRad * rad - rMax);
             found++;
           }
         }
       }
-      
+
     }
-    
-    for (HoughLine line: lines) {
-      System.out.println("Value of line: "+hough2[line.angle()][line.radius()]);
-    }
-    
-    
+
     long msLines = System.currentTimeMillis();
 
     // Create RGB image and fill in Hough space as gray scale image
@@ -188,34 +177,18 @@ public class HoughTransform implements PlugInFilter {
     } catch (Exception e) {
       e.printStackTrace();
     }
-    
+
     // Add distance lines to image
     ImagePlus im_new = new ImagePlus("img/Polygon2.png");
     ImageProcessor ip_new = im_new.getProcessor();
     ip_new.setColor(Color.WHITE);
-    
-   
+
     int x1 = xC, y1 = yC;
-    System.out.println("x1=" + x1 + " y1="+y1);
     for (HoughLine line : lines) {
-      System.out.println("line radius: "+line.radius()+" line angle: "+line.angle());
-      double radius = (line.radius() * dRad) % rMax;
-      System.out.println("new radius: "+radius);
-
-      int x2 = (int) (cos[line.angle()] * radius);
-      System.out.println("x2="+x2);
-      x2 = x2 + xC;
-      System.out.println("x2-new="+x2);
-      
-      int y2 = (int) (sin[line.angle()] * radius);
-      System.out.println("y2="+y2);
-      y2 = y2 + yC;
-      System.out.println("y2-new="+y2);
-
-      
+      int x2 = (int) (Math.cos(line.angle()) * line.radius()) + xC;
+      int y2 = (int) (Math.sin(line.angle()) * line.radius()) + yC;
       ip_new.drawLine(x1, y1, x2, y2);
-      System.out.println("new line with x2=" +x2 +" and y2="+y2);
-    } 
+    }
     im_new.show();
 
     System.out.println("maxAccum: " + maxAccum);
