@@ -1,5 +1,7 @@
 package imagej_hough;
 
+import java.awt.Color;
+
 import ij.ImagePlus;
 import ij.gui.NewImage;
 import ij.plugin.PNG_Writer;
@@ -7,6 +9,25 @@ import ij.plugin.filter.PlugInFilter;
 import ij.process.*;
 
 public class HoughTransform implements PlugInFilter {
+
+  class HoughLine {
+    private int mAngle, mRadius;
+
+    public HoughLine(int angle, int radius) {
+      mAngle = angle;
+      mRadius = radius;
+    }
+    
+    public int radius() {
+      return mRadius;
+    }
+    
+    public int angle() {
+      return mAngle;
+    }
+
+  }
+
   @Override
   public int setup(String arg, ImagePlus imp) {
     return DOES_8G;
@@ -20,7 +41,6 @@ public class HoughTransform implements PlugInFilter {
     final int nAng = 256; // number of angels
     final int nRad = 256; // number of radii
     final int nLines = 4; // number of lines to search
-    final int nonMaxR = 1; // Radius for non max. suppression
 
     int xC = ip.getWidth() / 2; // x-coordinate of image center
     int yC = ip.getHeight() / 2; // y-coordinate of image center
@@ -35,8 +55,7 @@ public class HoughTransform implements PlugInFilter {
     int maxAccum = 0; // max. value in Hough space
     double[] cos = new double[nAng]; // array for precalculated cos values
     double[] sin = new double[nAng]; // array for precalculated sin values
-    int[] lineRad = new int[nLines]; // array for radius of strongest lines
-    int[] lineAng = new int[nLines]; // array for angle of strongest lines
+    HoughLine[] lines = new HoughLine[nLines]; // array for strongest lines
 
     // Precalculate cos & sin values
     for (int t = 0; t < nAng; t++) {
@@ -58,8 +77,9 @@ public class HoughTransform implements PlugInFilter {
             int r = (int) Math.round((cx * cos[t] + cy * sin[t]) / dRad) + nRad / 2;
             if (r >= 0 && r < nRad) {
               hough1[t][r]++;
-              if (hough1[t][r] > maxAccum)
-                maxAccum++;
+              if (hough1[t][r] > maxAccum) {
+                maxAccum = hough1[t][r];
+              }
             }
           }
         }
@@ -68,15 +88,83 @@ public class HoughTransform implements PlugInFilter {
 
     long msSpace = System.currentTimeMillis();
 
-    // Build non maximum supression with radius nonMaxR into hough2
-    // ???
+    // Build non maximum supression with 3x3 mask into hough2
+    // algorithm with nonMaxR not implemented because this is really unnecessary
+    // .. !
+    for (int ang = 0; ang < nAng; ang++) {
+      for (int rad = 0; rad < nRad; rad++) {
+        int max = 0;
+        if (ang > 0) {
+          max = Math.max(max, hough1[ang - 1][rad]); // pixel left
+          if (rad > 0) {
+            max = Math.max(max, hough1[ang - 1][rad - 1]); // pixel bottom left
+            max = Math.max(max, hough1[ang][rad - 1]); // pixel bottom
+          }
+          if (rad < nRad-1) {
+            max = Math.max(max, hough1[ang - 1][rad + 1]); // pixel top left
+            max = Math.max(max, hough1[ang][rad + 1]); // pixel top
+          }
+        }
+        if (ang < nAng-1) {
+          max = Math.max(max, hough1[ang + 1][rad]); // pixel right
+          if (rad > 0) {
+            max = Math.max(max, hough1[ang + 1][rad - 1]); // pixel bottom right
+          }
+          if (rad < nRad-1) {
+            max = Math.max(max, hough1[ang + 1][rad + 1]); // pixel top right
+          }
+        }
+
+        if (hough1[ang][rad] < max) {
+          hough2[ang][rad] = 0; // non maximum suppression
+        } else {
+          hough2[ang][rad] = hough1[ang][rad];
+        }
+
+      }
+    }
 
     // Build histogram of the array hough2
-    // ???
+    int[] hist = new int[maxAccum+1];
+    for (int ang = 0; ang < nAng; ang++) {
+      for (int rad = 0; rad < nRad; rad++) {
+        hist[hough2[ang][rad]]++;
+      }
+    }
+    
+    // print histogram
+    for (int i = maxAccum; i >= 0; i--) {
+      System.out.println("Value: "+i+" Amount: "+hist[i]);
+    }
 
-    // Get n strongest lines into arrays lineAng & lineRad
-    // ???
-
+    // Get n strongest lines into array lines
+    int found = 0;
+    int value = maxAccum+1;
+    int amount = 0;
+    
+    while (found < nLines) {  
+      do {
+        value--;
+        amount = hist[value];
+      }      
+      while (amount==0);
+      
+      for (int ang = 0; ang < nAng; ang++) {
+        for (int rad = 0; rad < nRad; rad++) {
+          if (hough2[ang][rad] == value) {
+            lines[found] = new HoughLine(ang, rad);
+            found++;
+          }
+        }
+      }
+      
+    }
+    
+    for (HoughLine line: lines) {
+      System.out.println("Value of line: "+hough2[line.angle()][line.radius()]);
+    }
+    
+    
     long msLines = System.currentTimeMillis();
 
     // Create RGB image and fill in Hough space as gray scale image
@@ -96,10 +184,39 @@ public class HoughTransform implements PlugInFilter {
     imgAccum.updateAndDraw();
     PNG_Writer png = new PNG_Writer();
     try {
-      png.writeImage(imgAccum, "../../Images/PolygonAccum.png", 0);
+      png.writeImage(imgAccum, "img/PolygonAccum.png", 0);
     } catch (Exception e) {
       e.printStackTrace();
     }
+    
+    // Add distance lines to image
+    ImagePlus im_new = new ImagePlus("img/Polygon2.png");
+    ImageProcessor ip_new = im_new.getProcessor();
+    ip_new.setColor(Color.WHITE);
+    
+   
+    int x1 = xC, y1 = yC;
+    System.out.println("x1=" + x1 + " y1="+y1);
+    for (HoughLine line : lines) {
+      System.out.println("line radius: "+line.radius()+" line angle: "+line.angle());
+      double radius = (line.radius() * dRad) % rMax;
+      System.out.println("new radius: "+radius);
+
+      int x2 = (int) (cos[line.angle()] * radius);
+      System.out.println("x2="+x2);
+      x2 = x2 + xC;
+      System.out.println("x2-new="+x2);
+      
+      int y2 = (int) (sin[line.angle()] * radius);
+      System.out.println("y2="+y2);
+      y2 = y2 + yC;
+      System.out.println("y2-new="+y2);
+
+      
+      ip_new.drawLine(x1, y1, x2, y2);
+      System.out.println("new line with x2=" +x2 +" and y2="+y2);
+    } 
+    im_new.show();
 
     System.out.println("maxAccum: " + maxAccum);
     System.out.println("Time for Hough space: " + (msSpace - msStart) + " ms");
@@ -108,7 +225,7 @@ public class HoughTransform implements PlugInFilter {
 
   public static void main(String[] args) {
     HoughTransform plugin = new HoughTransform();
-    ImagePlus im = new ImagePlus("../../Images/Polygon2.png");
+    ImagePlus im = new ImagePlus("img/Polygon2.png");
     im.show();
     plugin.setup("", im);
     plugin.run(im.getProcessor());
