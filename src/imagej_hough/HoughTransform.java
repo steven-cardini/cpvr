@@ -10,6 +10,20 @@ import ij.process.*;
 
 public class HoughTransform implements PlugInFilter {
 
+  private final static int pixelClip = 2; // clip this amount of pixels from
+                                          // image frame
+  private ImagePlus mInputImage;
+  private ImagePlus mOriginalImage;
+  private String mImageName;
+  private int mNrLines; // number of lines to search
+  private double mAngleFrom; // minimal angle in Bogenmass
+  private double mAngleTo; // maximal angle in Bogenmass
+  private int mNonMaxR; // TODO: use as radius for non-max-suppression
+  private Color mRadiusColor;
+  private Color mLineColor;
+  private HoughLine[] mFoundLines; // array for strongest lines
+  private boolean mShowResult;
+
   class HoughLine {
     private double mAngle, mRadius;
 
@@ -28,6 +42,46 @@ public class HoughTransform implements PlugInFilter {
 
   }
 
+  public HoughTransform(ImagePlus inputImage, ImagePlus originalImage, int nrLines, double angleFrom, double angleTo,
+      int nonMaxR, Color radiusColor, Color lineColor) {
+    mInputImage = inputImage.duplicate();
+    mOriginalImage = originalImage.duplicate();
+    mNrLines = nrLines;
+    mAngleFrom = angleFrom;
+    mAngleTo = angleTo;
+    mNonMaxR = nonMaxR;
+    mRadiusColor = radiusColor;
+    mLineColor = lineColor;
+    mFoundLines = new HoughLine[mNrLines];
+
+    mImageName = inputImage.getShortTitle();
+  }
+
+  public ImagePlus process(boolean showResult) {
+    System.out.println("[hough] processing image " + mImageName);
+    mShowResult = showResult;
+
+    // convert image to grayscale for hough analysis
+    ImageConverter ic = new ImageConverter(mInputImage);
+    ic.convertToGray8();
+    mInputImage.updateAndDraw();
+
+    setup("", mInputImage);
+    run(mInputImage.getProcessor());
+
+    return mOriginalImage;
+  }
+
+  public HoughLine[] getLines() {
+    return mFoundLines;
+  }
+
+  public void rotateImage(double angle) {
+    mInputImage.getProcessor().rotate(angle);
+    mInputImage.updateAndDraw();
+    mInputImage.show();
+  }
+
   @Override
   public int setup(String arg, ImagePlus imp) {
     return DOES_8G;
@@ -40,11 +94,12 @@ public class HoughTransform implements PlugInFilter {
     // Set up Hough space
     final int nAng = 256; // number of angels
     final int nRad = 256; // number of radii
-    final int nLines = 4; // number of lines to search
 
     int xC = ip.getWidth() / 2; // x-coordinate of image center
     int yC = ip.getHeight() / 2; // y-coordinate of image center
     double dAng = (Math.PI / nAng); // step size of angle
+    int minAng = (int) (mAngleFrom / dAng);
+    int maxAng = (int) (mAngleTo / dAng);
     double rMax = Math.sqrt(xC * xC + yC * yC); // max. radius (center to
                                                 // corner)
     double dRad = (2 * rMax) / nRad; // step size radius
@@ -55,7 +110,6 @@ public class HoughTransform implements PlugInFilter {
     int maxAccum = 0; // max. value in Hough space
     double[] cos = new double[nAng]; // array for precalculated cos values
     double[] sin = new double[nAng]; // array for precalculated sin values
-    HoughLine[] lines = new HoughLine[nLines]; // array for strongest lines
 
     // Precalculate cos & sin values
     for (int t = 0; t < nAng; t++) {
@@ -65,8 +119,8 @@ public class HoughTransform implements PlugInFilter {
     }
 
     // Fill Hough array & keep maximum
-    for (int y = 0; y < ip.getHeight(); y++) {
-      for (int x = 0; x < ip.getWidth(); x++) {
+    for (int y = (0 + pixelClip); y < (ip.getHeight() - pixelClip); y++) {
+      for (int x = (0 + pixelClip); x < (ip.getWidth() - pixelClip); x++) {
         int pixel = ip.getPixel(x, y);
         if (pixel > 0) {
           int cx = x - xC, cy = y - yC;
@@ -88,9 +142,7 @@ public class HoughTransform implements PlugInFilter {
 
     long msSpace = System.currentTimeMillis();
 
-    // Build non maximum supression with 3x3 mask into hough2
-    // algorithm with nonMaxR not implemented because this is really unnecessary
-    // .. !
+    // Build non maximum supression with mask (size: mNonMaxR) into hough2
     for (int ang = 0; ang < nAng; ang++) {
       for (int rad = 0; rad < nRad; rad++) {
         int max = 0;
@@ -137,33 +189,67 @@ public class HoughTransform implements PlugInFilter {
     int value = maxAccum + 1;
     int amount = 0;
 
-    while (found < nLines) {
+    while (found < mNrLines) {
       do {
         value--;
         amount = hist[value];
       } while (amount == 0);
 
-      for (int ang = 0; ang < nAng; ang++) {
+      for (int ang = minAng; ang < maxAng; ang++) {
         for (int rad = 0; rad < nRad; rad++) {
           if (hough2[ang][rad] == value) {
-            lines[found] = new HoughLine(dAng * ang, dRad * rad - rMax);
+            mFoundLines[found] = new HoughLine(dAng * ang, dRad * rad - rMax);
             found++;
           }
+          if (found >= mNrLines)
+            break;
         }
+        if (found >= mNrLines)
+          break;
       }
 
     }
 
     long msLines = System.currentTimeMillis();
 
+    createImage(hough1, maxAccum, mImageName + "_hough");
+    createImage(hough2, maxAccum, mImageName + "_hough_nonMaxEl");
+
+    // Add distance lines to image
+    ImageProcessor ipTransformed = mOriginalImage.getProcessor();
+
+    int x1 = xC, y1 = yC;
+    for (HoughLine line : mFoundLines) {
+      int x2 = (int) (Math.cos(line.angle()) * line.radius()) + xC;
+      int y2 = (int) (Math.sin(line.angle()) * line.radius()) + yC;
+      ipTransformed.setColor(mRadiusColor);
+      ipTransformed.drawLine(x1, y1, x2, y2);
+
+      // draw line itself
+      int x3 = x2 + (y1 - y2);
+      int y3 = y2 + (x2 - x1);
+      ipTransformed.setColor(mLineColor);
+      ipTransformed.drawLine(x2, y2, x3, y3);
+      //
+    }
+    mOriginalImage.updateAndDraw();
+    if (mShowResult)
+      mOriginalImage.show();
+
+    System.out.println("maxAccum: " + maxAccum);
+    System.out.println("Time for Hough space: " + (msSpace - msStart) + " ms");
+    System.out.println("Time for Hough lines: " + (msLines - msSpace) + " ms");
+  }
+
+  private static void createImage(int[][] values, float maxValue, String outputName) {
     // Create RGB image and fill in Hough space as gray scale image
-    ImagePlus imgAccum = NewImage.createRGBImage("imgAccum", nAng, nRad, 1, NewImage.FILL_BLACK);
+    ImagePlus imgAccum = NewImage.createRGBImage(outputName, values.length, values[0].length, 1, NewImage.FILL_BLACK);
     ImageProcessor ipAccum = imgAccum.getProcessor();
     int[] rgb = new int[3];
     for (int y = 0; y < ipAccum.getHeight(); y++) {
       for (int x = 0; x < ipAccum.getWidth(); x++) { // Scale Hough space so
                                                      // that
-        rgb[0] = rgb[1] = rgb[2] = (int) (((float) hough1[x][y] / (float) maxAccum) * 255.0f);
+        rgb[0] = rgb[1] = rgb[2] = (int) (((float) values[x][y] / (float) maxValue) * 255.0f);
         ipAccum.putPixel(x, y, rgb);
       }
     }
@@ -173,34 +259,10 @@ public class HoughTransform implements PlugInFilter {
     imgAccum.updateAndDraw();
     PNG_Writer png = new PNG_Writer();
     try {
-      png.writeImage(imgAccum, "img/PolygonAccum.png", 0);
+      png.writeImage(imgAccum, "img/" + outputName + ".png", 0);
     } catch (Exception e) {
       e.printStackTrace();
     }
-
-    // Add distance lines to image
-    ImagePlus im_new = new ImagePlus("img/Polygon2.png");
-    ImageProcessor ip_new = im_new.getProcessor();
-    ip_new.setColor(Color.WHITE);
-
-    int x1 = xC, y1 = yC;
-    for (HoughLine line : lines) {
-      int x2 = (int) (Math.cos(line.angle()) * line.radius()) + xC;
-      int y2 = (int) (Math.sin(line.angle()) * line.radius()) + yC;
-      ip_new.drawLine(x1, y1, x2, y2);
-    }
-    im_new.show();
-
-    System.out.println("maxAccum: " + maxAccum);
-    System.out.println("Time for Hough space: " + (msSpace - msStart) + " ms");
-    System.out.println("Time for Hough lines: " + (msLines - msSpace) + " ms");
   }
 
-  public static void main(String[] args) {
-    HoughTransform plugin = new HoughTransform();
-    ImagePlus im = new ImagePlus("img/Polygon2.png");
-    im.show();
-    plugin.setup("", im);
-    plugin.run(im.getProcessor());
-  }
 }
