@@ -43,8 +43,7 @@ public class LaplaceTransform implements PlugInFilter {
   @Override
   public void run(ImageProcessor ip) {
 
-    mTransformedImage = NewImage.createRGBImage(mImageName + "_laplace", ip.getWidth(), ip.getHeight(), 1,
-        NewImage.FILL_BLACK);
+    mTransformedImage = NewImage.createRGBImage(mImageName + "_laplace", ip.getWidth(), ip.getHeight(), 1, NewImage.FILL_BLACK);
     ImageProcessor ipTransformed = mTransformedImage.getProcessor();
 
     // Perform laplace transform and fill new image
@@ -112,6 +111,7 @@ public class LaplaceTransform implements PlugInFilter {
       mTransformedImage.show();
     PNG_Writer png = new PNG_Writer();
     try {
+      System.out.println("[laplace] saving image " + mImageName + "_laplace.png");
       png.writeImage(mTransformedImage, "img/" + mImageName + "_laplace.png", 0);
     } catch (Exception e) {
       e.printStackTrace();

@@ -45,8 +45,7 @@ public class BinaryTransform implements PlugInFilter {
   @Override
   public void run(ImageProcessor ip) {
 
-    mTransformedImage = NewImage.createByteImage(mImageName + "_binary", ip.getWidth(), ip.getHeight(), 1,
-        NewImage.FILL_BLACK);
+    mTransformedImage = NewImage.createByteImage(mImageName + "_binary", ip.getWidth(), ip.getHeight(), 1, NewImage.FILL_BLACK);
     ImageProcessor ipTransformed = mTransformedImage.getProcessor();
 
     // Perform binary transform and fill new image
@@ -68,6 +67,7 @@ public class BinaryTransform implements PlugInFilter {
 
     PNG_Writer png = new PNG_Writer();
     try {
+      System.out.println("[binary] saving image " + mImageName + "_binary.png");
       png.writeImage(mTransformedImage, "img/" + mImageName + "_binary.png", 0);
     } catch (Exception e) {
       e.printStackTrace();

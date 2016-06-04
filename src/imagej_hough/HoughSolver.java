@@ -10,8 +10,7 @@ public class HoughSolver {
   public static void main(String[] args) {
 
     ImagePlus imgPolygonOriginal = new ImagePlus("img/Polygon2.png");
-    HoughTransform htPolygon = new HoughTransform(imgPolygonOriginal, imgPolygonOriginal, 4, 0, Math.PI, 1, Color.WHITE,
-        Color.GRAY);
+    HoughTransform htPolygon = new HoughTransform(imgPolygonOriginal, imgPolygonOriginal, 4, 0, Math.PI, 1, Color.WHITE, Color.GRAY);
     htPolygon.process(true);
 
     ImagePlus imgShuttleOriginal = new ImagePlus("img/Shuttle2.png");
@@ -23,8 +22,7 @@ public class HoughSolver {
     BinaryTransform btShuttle = new BinaryTransform(imgShuttleLaplace, 220);
     ImagePlus imgShuttleBinary = btShuttle.process(false);
 
-    HoughTransform htShuttle = new HoughTransform(imgShuttleBinary, imgShuttleOriginal, 20, 0, Math.PI / 2, 2,
-        Color.RED, Color.BLUE);
+    HoughTransform htShuttle = new HoughTransform(imgShuttleBinary, imgShuttleOriginal, 16, Math.PI / 4, Math.PI / 2, 2, Color.RED, Color.BLUE);
     htShuttle.process(true);
 
     HoughLine[] lines = htShuttle.getLines();

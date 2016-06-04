@@ -42,8 +42,8 @@ public class HoughTransform implements PlugInFilter {
 
   }
 
-  public HoughTransform(ImagePlus inputImage, ImagePlus originalImage, int nrLines, double angleFrom, double angleTo,
-      int nonMaxR, Color radiusColor, Color lineColor) {
+  public HoughTransform(ImagePlus inputImage, ImagePlus originalImage, int nrLines, double angleFrom, double angleTo, int nonMaxR, Color radiusColor,
+      Color lineColor) {
     mInputImage = inputImage.duplicate();
     mOriginalImage = originalImage.duplicate();
     mNrLines = nrLines;
@@ -74,12 +74,6 @@ public class HoughTransform implements PlugInFilter {
 
   public HoughLine[] getLines() {
     return mFoundLines;
-  }
-
-  public void rotateImage(double angle) {
-    mInputImage.getProcessor().rotate(angle);
-    mInputImage.updateAndDraw();
-    mInputImage.show();
   }
 
   @Override
@@ -212,29 +206,69 @@ public class HoughTransform implements PlugInFilter {
 
     long msLines = System.currentTimeMillis();
 
-    createImage(hough1, maxAccum, mImageName + "_hough");
-    createImage(hough2, maxAccum, mImageName + "_hough_nonMaxEl");
+    createImage(hough1, maxAccum, mImageName + "_hough-space");
+    createImage(hough2, maxAccum, mImageName + "_hough-space_nonMaxEl");
 
     // Add distance lines to image
     ImageProcessor ipTransformed = mOriginalImage.getProcessor();
 
-    int x1 = xC, y1 = yC;
+    double x1 = xC, y1 = yC;
     for (HoughLine line : mFoundLines) {
-      int x2 = (int) (Math.cos(line.angle()) * line.radius()) + xC;
-      int y2 = (int) (Math.sin(line.angle()) * line.radius()) + yC;
+      double x2 = Math.cos(line.angle()) * line.radius() + xC;
+      double y2 = Math.sin(line.angle()) * line.radius() + yC;
       ipTransformed.setColor(mRadiusColor);
-      ipTransformed.drawLine(x1, y1, x2, y2);
+      ipTransformed.drawLine((int) x1, (int) y1, (int) x2, (int) y2);
 
       // draw line itself
-      int x3 = x2 + (y1 - y2);
-      int y3 = y2 + (x2 - x1);
+      // ------------------------------------------------------------------->
+      // calculate direction vector of line: use vector perpendicular to (x1,y1)->(x2, y2)
+      double vx = y1 - y2; // vector in x direction of line
+      double vy = x2 - x1; // vector in y direction of line
+
+      if (vx == 0 || vy == 0)
+        continue; // do not draw lines right at the center
+
+      // calculate parameters dx and dy to reach borders of image: (x2, y2) + (dx * vx, dy * vy)
+      double dx0 = -(x2 / vx); // use this parameter to reach x=0 of line (x2 + dx0 * vx = 0)
+      double dxE = (ip.getWidth() - x2) / vx; // use this parameter to reach x=imageWidth of line (x2 + dxE * vx = ip.getWidth())
+      double dy0 = -(y2 / vy); // use this parameter to reach y=0 of line (y2 + dy0 * vy = 0)
+      double dyE = (ip.getHeight() - y2) / vy; // use this parameter to reach y=imageHeigth of line (y2 + dyE * vy = ip.getHeight())
+
+      double x3 = 0, y3 = 0, x4 = 0, y4 = 0;
+
+      // check which parameter to use to reach top / left border
+      if (y2 + dx0 * vy >= 0) {
+        x3 = x2 + dx0 * vx;
+        y3 = y2 + dx0 * vy;
+      } else {
+        x3 = x2 + dy0 * vx;
+        y3 = y2 + dy0 * vy;
+      }
+
+      // check which parameter to use to reach bottom / right border
+      if (y2 + dxE * vy <= ip.getHeight()) {
+        x4 = x2 + dxE * vx;
+        y4 = y2 + dxE * vy;
+      } else {
+        x4 = x2 + dyE * vx;
+        y4 = y2 + dyE * vy;
+      }
+
       ipTransformed.setColor(mLineColor);
-      ipTransformed.drawLine(x2, y2, x3, y3);
-      //
+      ipTransformed.drawLine((int) x2, (int) y2, (int) x3, (int) y3);
+      ipTransformed.drawLine((int) x2, (int) y2, (int) x4, (int) y4);
     }
+
     mOriginalImage.updateAndDraw();
     if (mShowResult)
       mOriginalImage.show();
+    PNG_Writer png = new PNG_Writer();
+    try {
+      System.out.println("[hough] saving image " + mImageName + "_hough.png");
+      png.writeImage(mOriginalImage, "img/" + mImageName + "_hough.png", 0);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
 
     System.out.println("maxAccum: " + maxAccum);
     System.out.println("Time for Hough space: " + (msSpace - msStart) + " ms");
@@ -259,6 +293,7 @@ public class HoughTransform implements PlugInFilter {
     imgAccum.updateAndDraw();
     PNG_Writer png = new PNG_Writer();
     try {
+      System.out.println("[hough] saving image " + outputName + ".png");
       png.writeImage(imgAccum, "img/" + outputName + ".png", 0);
     } catch (Exception e) {
       e.printStackTrace();
